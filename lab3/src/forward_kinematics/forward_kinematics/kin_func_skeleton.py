@@ -105,6 +105,12 @@ def skew_3d(omega):
     """
 
     # YOUR CODE HERE
+    return np.array([
+        [0, -omega[2], omega[1]],
+        [omega[2], 0, -omega[0]],
+        [-omega[1], omega[0], 0]
+    ])
+
 
 def rotation_3d(omega, theta):
     """
@@ -119,6 +125,11 @@ def rotation_3d(omega, theta):
     """
 
     # YOUR CODE HERE
+    w_hat = skew_3d(omega)
+    w_mag = np.linalg.norm(omega)
+    C = w_hat / w_mag
+    return np.eye(3) + C * np.sin(w_mag * theta) + (C@C) * (1 - np.cos(w_mag * theta))
+
 
 def hat_3d(xi):
     """
@@ -132,6 +143,11 @@ def hat_3d(xi):
     """
 
     # YOUR CODE HERE
+    hat = np.zeros((4, 4))
+    hat[:3, :3] = skew_3d(xi[3:])
+    hat[:3, 3]  = xi[0:3]
+    return hat
+
 
 def homog_3d(xi, theta):
     """
@@ -146,6 +162,20 @@ def homog_3d(xi, theta):
     """
 
     # YOUR CODE HERE
+    v = xi[:3]
+    w = xi[3:]
+    g = np.eye(4)
+
+    if np.allclose(w, 0):
+        g[:3, 3] = v * theta
+    else:
+        R = rotation_3d(w, theta)
+        w_hat = skew_3d(w)
+        p = ((np.eye(3) - R) @ (w_hat @ v) + np.outer(w, w) @ v * theta) / np.dot(w, w)
+        
+        g[:3, :3] = R
+        g[:3, 3]  = p
+    return g
 
 
 def prod_exp(xi, theta):
@@ -153,7 +183,7 @@ def prod_exp(xi, theta):
     Computes the product of exponentials for a kinematic chain, given 
     the twists and displacements for each joint.
     
-    Args:
+    Args:fokin_func_skeleton
     xi - (6, N) ndarray: the twists for each joint
     theta - (N,) ndarray: the displacement of each joint
     
@@ -162,6 +192,11 @@ def prod_exp(xi, theta):
     """
 
     # YOUR CODE HERE
+    g = np.eye(4)
+    for i in range(len(theta)):
+        g = g @ homog_3d(xi[:,i], theta[i])
+    return g
+
 
 #---------------------------------TESTING CODE---------------------------------
 #-------------------------DO NOT MODIFY ANYTHING BELOW HERE--------------------

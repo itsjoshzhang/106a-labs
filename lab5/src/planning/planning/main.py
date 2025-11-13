@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PointStamped 
 from tf2_ros import Buffer, TransformListener
-import numpy as np
+from tf2_geometry_msgs import do_transform_point
 
 class UR7e_CubeGrasp(Node):
     def __init__(self):
@@ -36,7 +36,14 @@ class UR7e_CubeGrasp(Node):
         #TODO: Add your code here!
         # ------------------------
 
-        return
+        transform = self.tf_buffer.lookup_transform(
+            'base_link',                    
+            msg.header.frame_id,          
+            rclpy.time.Time(),              
+            timeout=rclpy.duration.Duration(seconds=1.0)
+        )   
+        point_in_base_link = do_transform_point(msg, transform)
+        return point_in_base_link
 
 def main(args=None):
     rclpy.init(args=args)

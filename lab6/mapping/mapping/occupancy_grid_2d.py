@@ -44,19 +44,48 @@ class OccupancyGrid2d(Node):
         self.get_logger().info("OccupancyGrid2d initialized successfully.")
 
     def load_parameters(self):
+        """
+            random_downsample (float): Probability of keeping each laser scan point (10% kept, 90% discarded)
+            x_num (int): Number of grid cells along x-axis
+            x_min (float): Minimum x coordinate of map in meters
+            x_max (float): Maximum x coordinate of map in meters
+            x_res (computed): Size of each grid cell in x (computed as (x_max - x_min) / x_num = 0.8m)
+            y_num (int): Number of grid cells along y-axis
+            y_min (float): Minimum y coordinate of map in meters
+            y_max (float): Maximum y coordinate of map in meters
+            y_res (computed): Size of each grid cell in y (computed as (y_max - y_min) / y_num = 0.8m)
+            sensor_topic (str): Topic name to subscribe to for laser scan data
+            vis_topic (str): Topic name to publish visualization data
+            sensor_frame (str): Frame ID attached to the sensor
+            fixed_frame (str): Reference frame for the map
+        """
+        
         self.declare_parameter("random_downsample", 0.1)
         self._random_downsample = self.get_parameter("random_downsample").value
-
-         # Dimensions and bounds.
+        # Dimensions and bounds.
         # TODO! You'll need to set values for class variables called:
         # -- self._x_num
+        self.declare_parameter("x/num", 25)
+        self._x_num = self.get_parameter("x/num").value
         # -- self._x_min
+        self.declare_parameter("x/min", -10.0)
+        self._x_min = self.get_parameter("x/min").value
         # -- self._x_max
+        self.declare_parameter("x/max", 10.0)
+        self._x_max = self.get_parameter("x/max").value
         # -- self._x_res # The resolution in x. Note: This isn't a ROS parameter. What will you do instead?
+        self._x_res = (self._x_max - self._x_min) / self._x_num
         # -- self._y_num
+        self.declare_parameter("y/num", 25)
+        self._y_num = self.get_parameter("y/num").value
         # -- self._y_min
+        self.declare_parameter("y/min", -10.0)
+        self._y_min = self.get_parameter("y/min").value
         # -- self._y_max
+        self.declare_parameter("y/max", 10.0)
+        self._y_max = self.get_parameter("y/max").value
         # -- self._y_res # The resolution in y. Note: This isn't a ROS parameter. What will you do instead?
+        self._y_res = (self._y_max - self._y_min) / self._y_num
 
         self.declare_parameter("update/occupied", 0.7)
         self._occupied_update = self.probability_to_logodds(
@@ -74,12 +103,19 @@ class OccupancyGrid2d(Node):
         # Topics.
         # TODO! You'll need to set values for class variables called:
         # -- self._sensor_topic
+        self.declare_parameter("sensor_topic", "/scan")
+        self._sensor_topic = self.get_parameter("sensor_topic").value
         # -- self._vis_topic
-
+        self.declare_parameter("vis_topic", "/vis/map")
+        self._vis_topic = self.get_parameter("vis_topic").value
         # Frames.
         # TODO! You'll need to set values for class variables called:
         # -- self._sensor_frame
+        self.declare_parameter("sensor_frame", "base_link")
+        self._sensor_frame = self.get_parameter("sensor_frame").value
         # -- self._fixed_frame
+        self.declare_parameter("fixed_frame", "odom")
+        self._fixed_frame = self.get_parameter("fixed_frame").value
 
         return True
 
@@ -102,50 +138,71 @@ class OccupancyGrid2d(Node):
         if not self._initialized:
             self.get_logger().error("Node not initialized.")
             return
-
+        
         self.get_logger().debug(f"Sensor pose Callback")
-        # Get our current pose from TF.
+        
         try:
             pose = self._tf_buffer.lookup_transform(
                 self._fixed_frame, self._sensor_frame, rclpy.time.Time())
         except Exception as e:
-            # Writes an error message to the ROS log but does not raise an exception
             self.get_logger().error(f"TF lookup failed: {e}")
             return
-
+        
         self.get_logger().debug(f"Sensor pose: {pose}")
-        # Extract x, y coordinates and heading (yaw) angle of the turtlebot, 
-        # assuming that the turtlebot is on the ground plane.
+        
         sensor_x = pose.transform.translation.x
         sensor_y = pose.transform.translation.y
-
         qx = pose.transform.rotation.x
         qy = pose.transform.rotation.y
         qz = pose.transform.rotation.z
         qw = pose.transform.rotation.w
-        roll, pitch, yaw = quat2euler([qw, qx, qy, qz])  # [w,x,y,z]
-
+        roll, pitch, yaw = quat2euler([qw, qx, qy, qz])
+        
         if abs(pose.transform.translation.z) > 0.05:
             self.get_logger().warn("Robot not on ground plane.")
         if abs(roll) > 0.1 or abs(pitch) > 0.1:
             self.get_logger().warn("Robot roll/pitch too large.")
-        # Loop over all ranges in the LaserScan.
+        
         for idx, r in enumerate(msg.ranges):
             if np.random.rand() > self._random_downsample or np.isnan(r):
                 continue
             
-            # Get angle of this ray in fixed frame.
-            # TODO!
-
+            angle = yaw + msg.angle_min + idx * msg.angle_increment
+            
             if r > msg.range_max or r < msg.range_min:
                 continue
-
-            # Walk along this ray from the scan point to the sensor.
-            # Update log-odds at each voxel along the way.
-            # Only update each voxel once. 
-            # The occupancy grid is stored in self._map
-            # TODO!
-        # Visualize.
+            
+            end_x = sensor_x + r * np.cos(angle)
+            end_y = sensor_y + r * np.sin(angle)
+            
+            ray_distance = r
+            step_size = min(self._x_res, self._y_res) / 2.0
+            
+            updated_voxels = set()
+            
+            num_steps = int(np.ceil(ray_distance / step_size))
+            for step_idx in range(num_steps):
+                distance = step_idx * step_size
+                if distance >= ray_distance:
+                    break
+                    
+                x = sensor_x + distance * np.cos(angle)
+                y = sensor_y + distance * np.sin(angle)
+                
+                voxel = self.point_to_voxel(x, y)
+                if voxel is None or voxel in updated_voxels:
+                    continue
+                
+                ii, jj = voxel
+                updated_voxels.add(voxel)
+                
+                self._map[ii, jj] = max(self._map[ii, jj] + self._free_update, self._free_threshold)
+            
+            end_voxel = self.point_to_voxel(end_x, end_y)
+            if end_voxel is not None:
+                ii, jj = end_voxel
+                self._map[ii, jj] = min(self._map[ii, jj] + self._occupied_update, self._occupied_threshold)
+        
         self.visualize()
 
     # Convert (x, y) coordinates in fixed frame to grid coordinates.

@@ -21,7 +21,7 @@
   <arg name="random_downsample" default="0.1"/>
   <!-- Mapper node -->
   <node pkg="mapping"
-        exec="mapping_node"
+        exec="mapper"
         name="mapper"
         output="screen"> 
     <param name="frames/fixed" value="$(var fixed_frame)"/>

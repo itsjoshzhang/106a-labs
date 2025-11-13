@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'joint_control'
+package_name = 'mapping'
 
 setup(
     name=package_name,
@@ -10,18 +10,23 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name, ['launch/demo.launch.xml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ee106a-tah',
-    maintainer_email='danielmunicio360@gmail.com',
+    maintainer='ee106a-agd',
+    maintainer_email='joshzhang@berkeley.edu',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
     entry_points={
         'console_scripts': [
-            'keyboard_controller = joint_control.keyboard_controller:main',
-            'joint_pos_controller = joint_control.joint_pos_controller:main'
+            'mapper = mapping.mapping_node:main',
+            'grid = mapping.occupancy_grid:main',
         ],
     },
 )
