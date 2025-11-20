@@ -21,9 +21,9 @@ class TurtleBotController(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         # Controller gains
-        self.Kp = np.diag([2.0, 0.8])
-        self.Kd = np.diag([-0.5, 0.5])
-        self.Ki = np.diag([-0.1, 0.1])
+        self.Kp = np.diag([0.2, 0.2])
+        self.Kd = np.diag([-0.2, 0.2])
+        self.Ki = np.diag([0.0, 0.0])
 
         # Subscriber
         self.create_subscription(PointStamped, '/goal_point', self.planning_callback, 10)
@@ -34,19 +34,49 @@ class TurtleBotController(Node):
     # Main waypoint controller
     # ------------------------------------------------------------------
     def controller(self, waypoint):
+        prev_err = np.zeros(2)
+        integral = np.zeros(2)
+
         while rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0.1)
-            # TODO: Transform the waypoint from the odom/world frame into the robot's base_link frame 
-            # before computing errors — you'll need this so x_err and yaw_err are in the robot's coordinate system.
+            try:
+                trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
+            except Exception as e:
+                continue
+            
+            p = PoseStamped()
+            p.header.frame_id = 'odom'
+            p.pose.position.x = waypoint[0]
+            p.pose.position.y = waypoint[1]
 
-            #TODO: Calculate x and yaw errors! 
-            x_err = 0.
-            yaw_err = 0.
+            quat = self._quat_from_yaw(waypoint[2])
+            orin = p.pose.orientation
+            orin.x, orin.y, orin.z, orin.w = quat
+            pose_base = do_transform_pose(p.pose, trans)
+
+            x_err = pose_base.position.x
+            q = pose_base.orientation
+            roll, pitch, yaw_err = euler.quat2euler([q.w, q.x, q.y, q.z])
 
             if abs(x_err) < 0.03 and abs(yaw_err) < 0.2:
                 self.get_logger().info("Waypoint reached, moving to next.")
                 return
 
+            err = np.array([x_err, yaw_err])
+            integral += err * 0.1
+            derivative = (err - prev_err) / 0.1
+            prev_err = err
+            
+            control = (
+                self.Kp @ err + 
+                self.Ki @ integral + 
+                self.Kd @ derivative
+            )
+            cmd = Twist()
+            cmd.linear.x = control[0]
+            cmd.angular.z = control[1]
+            self.pub.publish(cmd)
+            
             time.sleep(0.1)
 
     # ------------------------------------------------------------------

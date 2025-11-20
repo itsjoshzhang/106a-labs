@@ -42,23 +42,27 @@ class ImageSubscriber(Node):
                 for i, mask in enumerate(masks):
 
                     # TODO: Get number of pixels in mask
-                    pixel_count = 0. 
-
+                    mask_resized = cv2.resize(mask, (img_width, img_height))
+                    pixel_count = np.sum(mask_resized > 0.5)
                     CONE_AREA = 0.0208227849
 
                     # TODO: Get depth of image 
-                    depth = 0.
-
+                    fx = self.camera_intrinsics['fx']
+                    fy = self.camera_intrinsics['fy']
+                    depth = np.sqrt((fx * fy * CONE_AREA) / pixel_count)
                     self.get_logger().info(f'Cone {i+1}: depth={depth:.3f}m')
 
-
                     # TODO: Get u, and v of cone in image coordinates
-                    u, v = 0.
+                    mask_coords = np.argwhere(mask_resized > 0.5)
+                    v = np.mean(mask_coords[:, 0])
+                    u = np.mean(mask_coords[:, 1])
 
                     # TODO: Find X , Y , Z of cone
-                    X = 0.
-                    Y = 0.
-                    Z = 0. 
+                    cx = self.camera_intrinsics['cx']
+                    cy = self.camera_intrinsics['cy']
+                    X = (u - cx) * depth / fx
+                    Y = (v - cy) * depth / fy
+                    Z = depth
 
                     # Convert to turtlebot frame
                     # There's no camera frame for the turtlebots, so we just do this instead 
@@ -83,6 +87,12 @@ class ImageSubscriber(Node):
         # -------------------------------------------
         # TODO: Extract camera intrinsic parameters! 
         # -------------------------------------------
+        K = msg.k
+        fx = K[0]
+        fy = K[4]
+        cx = K[2]
+        cy = K[5]
+        self.camera_intrinsics = {'fx': fx, 'fy': fy, 'cx': cx, 'cy': cy}
         self.get_logger().info("Recieved Camera Info")
         
 
