@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import math
 import rclpy
 from rclpy.node import Node
@@ -7,7 +6,7 @@ import tf2_ros
 import numpy as np
 import transforms3d.euler as euler
 from geometry_msgs.msg import TransformStamped, PoseStamped, Twist, PointStamped
-from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose
+from tf2_geometry_msgs import do_transform_pose
 from plannedcntrl.trajectory import plan_curved_trajectory  # Your existing Bezier planner
 import time
 
@@ -46,38 +45,79 @@ class TurtleBotController(Node):
             
             p = PoseStamped()
             p.header.frame_id = 'odom'
+            p.header.stamp = self.get_clock().now().to_msg()
             p.pose.position.x = waypoint[0]
             p.pose.position.y = waypoint[1]
+            p.pose.position.z = 1.0
 
-            quat = self._quat_from_yaw(waypoint[2])
-            orin = p.pose.orientation
-            orin.x, orin.y, orin.z, orin.w = quat
-            pose_base = do_transform_pose(p.pose, trans)
+            p.pose.orientation.x = 0.0
+            p.pose.orientation.y = 0.0
+            p.pose.orientation.z = 0.0
+            p.pose.orientation.w = 1.0
 
-            x_err = pose_base.position.x
-            q = pose_base.orientation
-            roll, pitch, yaw_err = euler.quat2euler([q.w, q.x, q.y, q.z])
+            # see goal from robot pov
+            pose_base = do_transform_pose(p, trans)
 
-            if abs(x_err) < 0.03 and abs(yaw_err) < 0.2:
-                self.get_logger().info("Waypoint reached, moving to next.")
-                return
+            x_rel = pose_base.pose.position.x
+            y_rel = pose_base.pose.position.y
 
-            err = np.array([x_err, yaw_err])
+            dist = math.sqrt(x_rel**2 + y_rel**2)
+
+            yaw_err = math.atan2(y_rel, x_rel)
+
+            #STOP THE ROBOT
+            if dist < 0.05 and abs(yaw_err) < 0.2:
+                stop_cmd = Twist()
+                self.pub.publish(stop_cmd)
+
+            err = np.array([dist, yaw_err])
+
             integral += err * 0.1
-            derivative = (err - prev_err) / 0.1
+            derivative = (err-prev_err) / 0.1
             prev_err = err
-            
-            control = (
-                self.Kp @ err + 
-                self.Ki @ integral + 
-                self.Kd @ derivative
-            )
+
+            control = (self.Kp @ err + self.Ki @ integral + self.Kd @ derivative)
+
+            v = control[0]
+            w = control[1]
+
             cmd = Twist()
-            cmd.linear.x = control[0]
-            cmd.angular.z = control[1]
+            cmd.linear.x = float(v)
+            cmd.angular.z = float(w)
             self.pub.publish(cmd)
-            
+
             time.sleep(0.1)
+
+
+            # quat = self._quat_from_yaw(waypoint[2])
+            # orin = p.pose.orientation
+            # orin.x, orin.y, orin.z, orin.w = quat
+            # pose_base = do_transform_pose(p.pose, trans)
+
+            # x_err = pose_base.position.x
+            # q = pose_base.orientation
+            # roll, pitch, yaw_err = euler.quat2euler([q.w, q.x, q.y, q.z])
+
+            # if abs(x_err) < 0.03 and abs(yaw_err) < 0.2:
+            #     self.get_logger().info("Waypoint reached, moving to next.")
+            #     return
+
+            # err = np.array([x_err, yaw_err])
+            # integral += err * 0.1
+            # derivative = (err - prev_err) / 0.1
+            # prev_err = err
+            
+            # control = (
+            #     self.Kp @ err + 
+            #     self.Ki @ integral + 
+            #     self.Kd @ derivative
+            # )
+            # cmd = Twist()
+            # cmd.linear.x = control[0]
+            # cmd.angular.z = control[1]
+            # self.pub.publish(cmd)
+            
+            # time.sleep(0.1)
 
     # ------------------------------------------------------------------
     # Callback when goal point is published
