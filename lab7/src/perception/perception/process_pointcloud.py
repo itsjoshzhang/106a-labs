@@ -1,81 +1,64 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, Image
 from geometry_msgs.msg import PointStamped
 import numpy as np
 import sensor_msgs_py.point_cloud2 as pc2
 from std_msgs.msg import Header
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import numpy as np
+import open3d as o3d
+
 
 class RealSensePCSubscriber(Node):
     def __init__(self):
         super().__init__('realsense_pc_subscriber')
 
-        # Plane coefficients and max distance (meters)
-        self.declare_parameter('plane.a', 0.0)
-        self.declare_parameter('plane.b', 0.0)
-        self.declare_parameter('plane.c', 0.0)
-        self.declare_parameter('plane.d', 0.0)
-        self.declare_parameter('max_distance', 0.5)
-
-        self.a = self.get_parameter('plane.a').value
-        self.b = self.get_parameter('plane.b').value
-        self.c = self.get_parameter('plane.c').value
-        self.d = self.get_parameter('plane.d').value
-        self.max_distance = self.get_parameter('max_distance').value
-
         # Subscribers
-        self.pc_sub = self.create_subscription(
-            PointCloud2,
-            '/camera/camera/depth/color/points',
-            self.pointcloud_callback,
+        self.depth_sub = self.create_subscription(
+            Image,
+            '/camera/camera/depth/color/image_rect_raw',
+            self.depth_callback,
             10
         )
 
-        # Publishers
-        self.cube_pose_pub = self.create_publisher(PointStamped, '/cube_pose', 1)
-        self.filtered_points_pub = self.create_publisher(PointCloud2, '/filtered_points', 1)
+        self.img_sub = self.create_subscription(
+            Image,
+            '/camera/camera/color/image_rect_raw',
+            self.image_callback,
+            10
+        )
 
-        self.get_logger().info("Subscribed to PointCloud2 topic and marker publisher ready")
+        # Timers
+        self.create_timer(0.1, self.block_points_callback)
 
-    def pointcloud_callback(self, msg: PointCloud2):
+        # State Variables
+        self.depth_image = None
+        self.rgb_image = None
+        self.blocks = []
 
+    def depth_callback(self, msg):
+        if not self.depth_image:
+            self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            self.get_logger().info(f"Got depth image of shape {self.depth_image.shape}")
+    
+    def image_callback(self, msg):
+        if not self.rgb_img:
+            self.rgb_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            self.get_logger().info(f"Got rgb image of shape {self.rgb_image.shape}")
 
-        
-
-
-        # Convert PointCloud2 to Nx3 array
-        points = []
-        for p in pc2.read_points(msg, field_names=('x','y','z'), skip_nans=True):
-            points.append([p[0], p[1], p[2]])
-
-        points = np.array(points)
-        
-        # Apply plane filter (keep points above the table)
-        plane_distances = self.a * points[:, 0] + self.b * points[:, 1] + self.c * points[:, 2] + self.d
-        filtered_points = points[plane_distances < -0.01]
-        
-        # Apply max distance filter (distance from origin)
-        distances = np.linalg.norm(filtered_points, axis=1)
-        filtered_points = filtered_points[distances <= self.max_distance]
-        
-        # Compute position of the cube via remaining points
-        cube_x, cube_y, cube_z = np.mean(filtered_points, axis=0)
-        
-        cube_pose = PointStamped()
-        cube_pose.header = msg.header
-        cube_pose.point.x = float(cube_x)
-        cube_pose.point.y = float(cube_y)
-        cube_pose.point.z = float(cube_z)
-        
-        self.cube_pose_pub.publish(cube_pose)
-
-        self.publish_filtered_points(filtered_points, msg.header)
-
-    def publish_filtered_points(self, filtered_points: np.ndarray, header: Header):
-        # Create PointCloud2 message from filtered Nx3 array
-        filtered_msg = pc2.create_cloud_xyz32(header, filtered_points.tolist())
-        self.filtered_points_pub.publish(filtered_msg)
-
+    def block_points_callback(self):
+        if self.depth_image and self.rgb_image and not self.blocks:
+            # TODO: Call sam3 to get the masks
+            masks = ...
+            for m in masks:
+                masked_depth = m * self.depth_image
+                # TODO: Convert to open3d depth image
+                o3d_masked_depth = ...
+                pcd = o3d.geometry.create_point_cloud_from_depth_image()
+                
+                
 
 def main(args=None):
     rclpy.init(args=args)
