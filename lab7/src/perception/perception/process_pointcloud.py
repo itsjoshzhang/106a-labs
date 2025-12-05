@@ -15,7 +15,7 @@ class RealSensePCSubscriber(Node):
         self.declare_parameter('plane.b', 0.0)
         self.declare_parameter('plane.c', 0.0)
         self.declare_parameter('plane.d', 0.0)
-        self.declare_parameter('max_distance', 0.6)
+        self.declare_parameter('max_distance', 0.5)
 
         self.a = self.get_parameter('plane.a').value
         self.b = self.get_parameter('plane.b').value
@@ -38,6 +38,11 @@ class RealSensePCSubscriber(Node):
         self.get_logger().info("Subscribed to PointCloud2 topic and marker publisher ready")
 
     def pointcloud_callback(self, msg: PointCloud2):
+
+
+        
+
+
         # Convert PointCloud2 to Nx3 array
         points = []
         for p in pc2.read_points(msg, field_names=('x','y','z'), skip_nans=True):
