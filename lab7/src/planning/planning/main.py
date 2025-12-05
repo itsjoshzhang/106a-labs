@@ -14,11 +14,12 @@ import numpy as np
 
 from planning.ik import IKPlanner
 
+
 class UR7e_CubeGrasp(Node):
     def __init__(self):
         super().__init__('cube_grasp')
 
-        self.cube_pub = self.create_subscription(PointStamped, '/cube_pose_in_base', self.cube_callback, 1) # TODO: CHECK IF TOPIC ALIGNS WITH YOURS
+        self.cube_pub = self.create_subscription(PointStamped, '/cube_pose_base', self.cube_callback, 1) # TODO: CHECK IF TOPIC ALIGNS WITH YOURS
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(
@@ -39,6 +40,7 @@ class UR7e_CubeGrasp(Node):
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
 
+
     def cube_callback(self, cube_pose):
         if self.cube_pose is not None:
             return
@@ -55,6 +57,10 @@ class UR7e_CubeGrasp(Node):
         # Think about you will leverage the IK planner to get joint configurations for the cube grasping task.
         # To understand how the queue works, refer to the execute_jobs() function below.
         # -----------------------------------------------------------
+        x = cube_pose.point.x
+        y = cube_pose.point.y
+        z = cube_pose.point.z
+        current_state = self.joint_state
 
         # 1) Move to Pre-Grasp Position (gripper above the cube)
         '''
@@ -63,28 +69,49 @@ class UR7e_CubeGrasp(Node):
         y offset: -0.035 (Think back to lab 5, why is this needed?)
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
-        ...
-        self.job_queue.append(...)
+        pre_grasp_js = self.ik_planner.compute_ik(current_state, x, y - 0.035, z + 0.185)
+        current_state = pre_grasp_js
+
+        if pre_grasp_js is None:
+            self.get_logger().error("Failed IK for pre-grasp")
+            return
+        self.job_queue.append(pre_grasp_js)
 
         # 2) Move to Grasp Position (lower the gripper to the cube)
         '''
         Note that this will again be defined relative to the cube pose. 
         DO NOT CHANGE z offset lower than +0.16. 
         '''
+        grasp_js = self.ik_planner.compute_ik(current_state, x, y - 0.035, z + 0.16) #MIGHT BE z - 0.16
+        current_state = grasp_js
+
+        if grasp_js is None:
+            self.get_logger().error("Failed IK for grasp")
+            return
+        self.job_queue.append(grasp_js)
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        ...
-        
+        self.job_queue.append('toggle_grip')
+       
         # 4) Move back to Pre-Grasp Position
+        self.job_queue.append(pre_grasp_js)
+        current_state = pre_grasp_js
 
         # 5) Move to release Position
         '''
         We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
         Which offset will you change to achieve this and in what direction?
         '''
+        release_js = self.ik_planner.compute_ik(current_state, x + 0.4, y - 0.035, z + 0.185)
+        current_state = release_js
+
+        if release_js is None:
+            self.get_logger().error("Failed IK for release position")
+            return
+        self.job_queue.append(release_js)
 
         # 6) Release the gripper
-        ...
+        self.job_queue.append('toggle_grip')
 
         self.execute_jobs()
 

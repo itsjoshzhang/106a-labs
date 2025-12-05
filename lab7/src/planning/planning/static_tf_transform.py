@@ -11,9 +11,6 @@ class ConstantTransformPublisher(Node):
         super().__init__('constant_tf_publisher')
         self.br = StaticTransformBroadcaster(self)
 
-        self.declare_parameter('ar_marker', 'ar_marker_7')
-        marker = self.get_parameter('ar_marker').get_parameter_value().string_value
-
         # Homogeneous transform G_ar->base_link
         G = np.array([
             [-1, 0, 0, 0.0],
@@ -27,13 +24,24 @@ class ConstantTransformPublisher(Node):
         # ---------------------------
         # TODO: Fill out TransformStamped message
         # --------------------------
-        # Extract rotation (3x3) and translation (3x1)
+        
+        self.transform.header.frame_id = 'ar_marker_8'
+        self.transform.child_frame_id = 'base_link'
+
+        t = self.transform.transform
+        t.translation.x = G[0,3]
+        t.translation.y = G[1,3]
+        t.translation.z = G[2,3]
+
+        r = R.from_matrix(G[:3, :3])
+        t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w = r.as_quat()
 
         self.timer = self.create_timer(0.05, self.broadcast_tf)
 
     def broadcast_tf(self):
         self.transform.header.stamp = self.get_clock().now().to_msg()
         self.br.sendTransform(self.transform)
+
 
 def main():
     rclpy.init()

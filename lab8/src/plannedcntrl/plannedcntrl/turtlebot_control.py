@@ -88,37 +88,6 @@ class TurtleBotController(Node):
 
             time.sleep(0.1)
 
-
-            # quat = self._quat_from_yaw(waypoint[2])
-            # orin = p.pose.orientation
-            # orin.x, orin.y, orin.z, orin.w = quat
-            # pose_base = do_transform_pose(p.pose, trans)
-
-            # x_err = pose_base.position.x
-            # q = pose_base.orientation
-            # roll, pitch, yaw_err = euler.quat2euler([q.w, q.x, q.y, q.z])
-
-            # if abs(x_err) < 0.03 and abs(yaw_err) < 0.2:
-            #     self.get_logger().info("Waypoint reached, moving to next.")
-            #     return
-
-            # err = np.array([x_err, yaw_err])
-            # integral += err * 0.1
-            # derivative = (err - prev_err) / 0.1
-            # prev_err = err
-            
-            # control = (
-            #     self.Kp @ err + 
-            #     self.Ki @ integral + 
-            #     self.Kd @ derivative
-            # )
-            # cmd = Twist()
-            # cmd.linear.x = control[0]
-            # cmd.angular.z = control[1]
-            # self.pub.publish(cmd)
-            
-            # time.sleep(0.1)
-
     # ------------------------------------------------------------------
     # Callback when goal point is published
     # ------------------------------------------------------------------

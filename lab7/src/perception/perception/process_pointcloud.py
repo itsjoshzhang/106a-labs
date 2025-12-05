@@ -44,27 +44,24 @@ class RealSensePCSubscriber(Node):
             points.append([p[0], p[1], p[2]])
 
         points = np.array(points)
-        # ------------------------
-        #TODO: Add your code here!
-        # ------------------------
-
-
-        # Apply max distance filter
-
-       
-        # Apply other filtering relative to plane
-        filtered_points = []
-
+        
+        # Apply plane filter (keep points above the table)
+        plane_distances = self.a * points[:, 0] + self.b * points[:, 1] + self.c * points[:, 2] + self.d
+        filtered_points = points[plane_distances < -0.01]
+        
+        # Apply max distance filter (distance from origin)
+        distances = np.linalg.norm(filtered_points, axis=1)
+        filtered_points = filtered_points[distances <= self.max_distance]
+        
         # Compute position of the cube via remaining points
-        cube_x = 0.0
-        cube_y = 0.0
-        cube_z = 0.0
-
-        self.get_logger().info(f"Filtered points: {filtered_points.shape[0]}")
-
+        cube_x, cube_y, cube_z = np.mean(filtered_points, axis=0)
+        
         cube_pose = PointStamped()
-        # Fill in message
-
+        cube_pose.header = msg.header
+        cube_pose.point.x = float(cube_x)
+        cube_pose.point.y = float(cube_y)
+        cube_pose.point.z = float(cube_z)
+        
         self.cube_pose_pub.publish(cube_pose)
 
         self.publish_filtered_points(filtered_points, msg.header)
@@ -85,3 +82,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+    

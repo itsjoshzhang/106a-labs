@@ -30,7 +30,7 @@ def generate_launch_description():
     
     plane_a_launch_arg = DeclareLaunchArgument(
         'plane_a',
-        default_value='0.0'
+        default_value='0.020'
     )
     plane_b_launch_arg = DeclareLaunchArgument(
         'plane_b',
@@ -38,11 +38,11 @@ def generate_launch_description():
     )
     plane_c_launch_arg = DeclareLaunchArgument(
         'plane_c',
-        default_value='0.0'
+        default_value='-0.076'
     )
     plane_d_launch_arg = DeclareLaunchArgument(
         'plane_d',
-        default_value='-0.075'
+        default_value='-0.053'
     )
     plane_a = LaunchConfiguration('plane_a')
     plane_b = LaunchConfiguration('plane_b')
@@ -77,19 +77,32 @@ def generate_launch_description():
 
     ar_marker_launch_arg = DeclareLaunchArgument(
         'ar_marker',
-        default_value='ar_marker_7'
+        default_value='ar_marker_8'
     )
     ar_marker = LaunchConfiguration('ar_marker')
+
+    # ik node
+    ik_node = Node (
+        package='planning',
+        executable='ik',
+        name='ik_node',
+        output='screen'
+    )
+
+    # transform_cube_pose_node
+    tcp_node = Node(
+        package='planning',
+        executable='tcp',
+        name='tcp_node',
+        output='screen'
+    )
 
     # Planning TF node
     planning_tf_node = Node(
         package='planning',
         executable='tf',
         name='tf_node',
-        output='screen',
-        parameters=[{
-            'ar_marker': ar_marker,
-        }]
+        output='screen'
     )
 
     # Static TF: base_link -> world
@@ -143,6 +156,8 @@ def generate_launch_description():
         realsense_launch,
         aruco_launch,
         perception_node,
+        ik_node,
+        tcp_node,
         planning_tf_node,
         static_base_world,
         moveit_launch,
